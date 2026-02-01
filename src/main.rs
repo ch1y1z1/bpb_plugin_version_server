@@ -3,6 +3,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -10,8 +11,6 @@ use std::{
     path::PathBuf,
     sync::{Arc, RwLock},
 };
-
-const DATA_FILE: &str = "data.json";
 
 type AppState = Arc<RwLock<HashMap<String, String>>>;
 
@@ -31,19 +30,23 @@ struct SetResponse {
     success: bool,
 }
 
-fn load_data() -> HashMap<String, String> {
-    let path = PathBuf::from(DATA_FILE);
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value = "3000")]
+    port: u16,
+
+    #[arg(short, long, default_value = "data.json")]
+    data_file: String,
+}
+
+fn load_data(path: &str) -> HashMap<String, String> {
+    let path = PathBuf::from(path);
     if path.exists() {
         let content = fs::read_to_string(&path).unwrap_or_default();
         serde_json::from_str(&content).unwrap_or_default()
     } else {
         HashMap::new()
-    }
-}
-
-fn save_data(data: &HashMap<String, String>) {
-    if let Ok(json) = serde_json::to_string_pretty(data) {
-        let _ = fs::write(DATA_FILE, json);
     }
 }
 
@@ -62,13 +65,14 @@ async fn set_value(
 ) -> Json<SetResponse> {
     let mut data = state.write().unwrap();
     data.insert(req.key, req.value);
-    save_data(&data);
     Json(SetResponse { success: true })
 }
 
 #[tokio::main]
 async fn main() {
-    let data = load_data();
+    let args = Args::parse();
+
+    let data = load_data(&args.data_file);
     let state: AppState = Arc::new(RwLock::new(data));
 
     let app = Router::new()
@@ -76,7 +80,8 @@ async fn main() {
         .route("/set", post(set_value))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Server running on http://0.0.0.0:3000");
+    let addr = format!("0.0.0.0:{}", args.port);
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    println!("Server running on http://{}", addr);
     axum::serve(listener, app).await.unwrap();
 }
