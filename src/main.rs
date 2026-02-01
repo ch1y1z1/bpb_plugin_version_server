@@ -12,7 +12,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-type AppState = Arc<RwLock<HashMap<String, String>>>;
+struct AppState {
+    data: RwLock<HashMap<String, String>>,
+    data_file: String,
+}
 
 #[derive(Serialize, Deserialize)]
 struct GetResponse {
@@ -50,21 +53,28 @@ fn load_data(path: &str) -> HashMap<String, String> {
     }
 }
 
+fn save_data(data: &HashMap<String, String>, path: &str) {
+    if let Ok(json) = serde_json::to_string_pretty(data) {
+        let _ = fs::write(path, json);
+    }
+}
+
 async fn get_value(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(key): Path<String>,
 ) -> Json<GetResponse> {
-    let data = state.read().unwrap();
+    let data = state.data.read().unwrap();
     let value = data.get(&key).cloned();
     Json(GetResponse { value })
 }
 
 async fn set_value(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(req): Json<SetRequest>,
 ) -> Json<SetResponse> {
-    let mut data = state.write().unwrap();
-    data.insert(req.key, req.value);
+    let mut data = state.data.write().unwrap();
+    data.insert(req.key.clone(), req.value);
+    save_data(&data, &state.data_file);
     Json(SetResponse { success: true })
 }
 
@@ -73,7 +83,10 @@ async fn main() {
     let args = Args::parse();
 
     let data = load_data(&args.data_file);
-    let state: AppState = Arc::new(RwLock::new(data));
+    let state = Arc::new(AppState {
+        data: RwLock::new(data),
+        data_file: args.data_file.clone(),
+    });
 
     let app = Router::new()
         .route("/get/:key", get(get_value))
