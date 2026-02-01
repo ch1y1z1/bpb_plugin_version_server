@@ -2,27 +2,58 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
   pull_request:
-    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: bpb_plugin_version_server
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Build release binary
+        run: cargo build --locked --release --target x86_64-unknown-linux-gnu
+
+      - name: Collect artifacts
         run: |
-          rustup default stable
-          rustup target add x86_64-unknown-linux-gnu
+          out="dist"
+          mkdir -p "$out"
+          cp "target/x86_64-unknown-linux-gnu/release/${BIN_NAME}" "$out/"
 
-      - name: Build for Linux x64
-        run: cargo build --release --target x86_64-unknown-linux-gnu
-
-      - name: Upload binary artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: bpb_plugin_version_server-linux-x64
-          path: target/x86_64-unknown-linux-gnu/release/bpb_plugin_version_server
+          path: dist
+          if-no-files-found: error
+
+      - name: Create GitHub Release and upload assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**
+          tag_name: ${{ github.ref_name }}
