@@ -27,37 +27,41 @@ cargo run
 
 ---
 
-## 配置选项
+## 命令行参数
 
-### 端口设置
+```
+Usage: bpb_plugin_version_server [OPTIONS]
 
-修改 `src/main.rs` 第 79 行：
-
-```rust
-let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+Options:
+  -p, --port <PORT>            监听端口 (默认: 3000)
+  -d, --data-file <DATA_FILE>  数据文件路径 (默认: data.json)
+  -h, --help                   打印帮助信息
+  -V, --version                打印版本号
 ```
 
-或使用环境变量（推荐方式）：
-
-```rust
-let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
-let addr = format!("0.0.0.0:{}", port);
-let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-```
-
-然后启动时指定端口：
+### 示例
 
 ```bash
-PORT=8080 cargo run
+# 使用默认端口 3000
+./bpb_plugin_version_server
+
+# 指定端口
+./bpb_plugin_version_server -p 8080
+./bpb_plugin_version_server --port 8080
+
+# 指定数据文件
+./bpb_plugin_version_server -d /var/lib/version-server/data.json
+./bpb_plugin_version_server --data-file /path/to/data.json
+
+# 组合使用
+./bpb_plugin_version_server -p 8080 -d /path/to/data.json
 ```
 
-### 绑定地址
+### 帮助信息
 
-修改 bind 地址：
-
-- `0.0.0.0:3000` - 监听所有网络接口（外网可访问）
-- `127.0.0.1:3000` - 仅本机访问
-- `192.168.1.100:3000` - 监听指定网卡
+```bash
+./bpb_plugin_version_server --help
+```
 
 ---
 
